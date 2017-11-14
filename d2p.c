@@ -1,27 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <assert.h>
-
-int rechercheDichotomique(int e, const int * t, int p, int r);
-
-
-int testDicho(){  
-  int t1[3] = {1,1,1};
-  int t2[4] = {0,1,2,3};
-  int t3[7] = {0,1,1,1,2,2,3};
-
-  assert(rechercheDichotomique(0, t1, 0, 3) == 0);
-  assert(rechercheDichotomique(1, t1, 0, 3) == 0);
-  assert(rechercheDichotomique(2, t1, 0, 3) == 3);
-  int i;
-  for(i = 0; i < 4; i++){
-    assert(rechercheDichotomique(i, t2, 0, 4) == i);
-  }
-  assert(rechercheDichotomique(1, t3, 0, 7) == 1);
-  assert(rechercheDichotomique(2, t3, 0, 7) == 4);
-  printf("Dichotomie OK\n");
-}
+#include <sys/time.h>
+#include <omp.h>
 
 int isSorted(int * t, int n){
   int i;
@@ -33,14 +13,6 @@ int isSorted(int * t, int n){
   return 1;
 }
 
-
-void printTab(const int * t, int a, int b){
-  int i;
-  for(i = a; i < b; i++){
-    printf("%d ", t[i]);
-  }
-  putchar('\n');
-}
 
 int rechercheDichotomique(int e, const int * t, int p, int r){
   // recherche l'element e entre les indices p (inclus) et r (exclus) du tableau t
@@ -95,9 +67,17 @@ void fusionRec(const int * t, int * r, int p1, int r1, int p2, int r2, int p3){
   int q1 = (p1 + r1) / 2;
   int q2 = rechercheDichotomique(t[q1], t, p2, r2);
   int q3 = p3 + (q1 - p1) + (q2 - p2);
-  r[q3] = t[q1];
-  fusionRec(t, r, p1, q1, p2, q2, p3);
-  fusionRec(t, r, q1 + 1, r1, q2, r2, q3 + 1);  
+#pragma omp parallel
+  {
+#pragma omp single
+    {
+      r[q3] = t[q1];
+#pragma omp task
+      fusionRec(t, r, p1, q1, p2, q2, p3);
+#pragma omp task
+      fusionRec(t, r, q1 + 1, r1, q2, r2, q3 + 1);
+    }
+  }
 }
 
 void fusion(int * t, int n){
@@ -107,22 +87,31 @@ void fusion(int * t, int n){
   for(i = 0; i < 2 * n; i++){
     r[i] = -1;
   }
-  
-  fusionRec(t, r, 0, n, n, 2 * n, 0);
 
-  if(isSorted(r, 2 * n)){
-    printf("Fusion OK\n");
+#ifdef NTHREADS
+  omp_set_num_threads(NTHREADS);
+#endif
+  
+  struct timeval t1, t2;
+  gettimeofday(&t1, NULL);
+  fusionRec(t, r, 0, n, n, 2 * n, 0);
+  gettimeofday(&t2, NULL);
+  
+  if(isSorted(t, n)){
+    printf("Fusion OK (%d threads created)\n", NTHREADS);
   }else{
     for(i = 0; i < 2 * n; i++){
-      printf("%d ", r[i]);    
+      printf("%d ", r[i]);
     }
     putchar('\n');
   }
+
+  printf("Time: %lu us\n",
+	 (t2.tv_sec - t1.tv_sec) * 1000000 +
+	 (t2.tv_usec - t1.tv_usec));
   
   free(r);
 }
-
-
 
 
 int main(int argc, char* argv[]){
@@ -135,7 +124,7 @@ int main(int argc, char* argv[]){
   for(i = 0; i < 2 * n; i++){
       scanf("%d", &t[i]);
   }
-
+  
   fusion(t, n);
 
   free(t);

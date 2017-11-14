@@ -1,4 +1,4 @@
-NB_THREADS=1
+NTHREADS=2
 N=10
 OUT=test_tmp
 IN=test
@@ -16,13 +16,10 @@ seq: cc-seq $(IN)
 	@./seq < $(IN)
 
 cc-para:
-	@gcc d2p.c -o para -fopenmp
+	@gcc d2p.c -DNTHREADS=$(NTHREADS) -o para -fopenmp
 
-para: cc-para $(IN)
-	@cat $(IN)
-	@./para < $(IN)
-
-para-rand: cc-para gentest
+para: cc-para gentest
 	@./para < $(OUT)
+
 clean:
-	@rm -rf seq para *~
+	@rm -rf seq para $(OUT) *~
